@@ -1,17 +1,53 @@
 {
-	"name": "digi-notes-backend",
-	"version": "0.1.0",
-	"main": "src/server.js",
-	"scripts": {
-		"start": "node src/server.js",
-		"dev": "nodemon src/server.js"
-	},
-	"dependencies": {
-		"express": "^4.18.2",
-		"pg": "^8.0.0",
-		"axios": "^1.5.0",
-		"cors": "^2.8.5",
-		"dotenv": "^16.0.0"
-	}
+  "name": "digi-notes-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Digi Notes - AI-powered note processing system",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "validate-env": "node scripts/validate-env.js",
+    "db:migrate": "node-pg-migrate up",
+    "db:migrate:down": "node-pg-migrate down",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:verbose": "jest --verbose",
+    "lint": "eslint .",
+    "docs:generate": "node ./scripts/generate-swagger.js || true"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "pg": "^8.11.0",
+    "redis": "^4.6.0",
+    "dotenv": "^16.0.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "express-rate-limit": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0",
+    "express-validator": "^7.0.0",
+    "node-pg-migrate": "^7.0.0",
+    "winston": "^3.8.0",
+    "winston-daily-rotate-file": "^4.7.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "axios": "^1.4.0",
+    "uuid": "^9.0.0"
+    ,
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^4.6.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "supertest": "^6.0.0"
+  }
 }
-
