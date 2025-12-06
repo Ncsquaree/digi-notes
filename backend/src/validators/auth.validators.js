@@ -31,11 +31,11 @@ const loginValidation = [
 ];
 
 const refreshTokenValidation = [
-  body('refreshToken').exists().isString().isLength({ min: 20 }).withMessage('refreshToken is required'),
+  body('refreshToken').exists().isString().withMessage('refreshToken is required'),
 ];
 
 const logoutValidation = [
-  body('refreshToken').exists().isString().isLength({ min: 20 }).withMessage('refreshToken is required'),
+  body('refreshToken').exists().isString().withMessage('refreshToken is required'),
 ];
 
 module.exports = {

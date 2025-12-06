@@ -22,10 +22,26 @@ const { ValidationError } = require('../utils/errors');
 function validate(validations) {
   return async (req, res, next) => {
     try {
-      await Promise.all((validations || []).map((v) => v.run(req)));
+      // Run validations sequentially to ensure deterministic population
+      // of validationResult(req) when tests provide plain req objects.
+      for (const v of (validations || [])) {
+        if (Array.isArray(v)) {
+          for (const ch of v) {
+            // each chain.run returns a promise
+            // eslint-disable-next-line no-await-in-loop
+            await ch.run(req);
+          }
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await v.run(req);
+        }
+      }
       const result = validationResult(req);
       if (result.isEmpty()) return next();
-      const formatted = result.array().map((e) => ({ field: e.param, message: e.msg, value: e.value }));
+      const formatted = result.array().map((e) => {
+        const inferredField = e.param || e.path || (e.location === 'params' && Object.keys(req.params || {})[0]) || (e.nestedErrors && e.nestedErrors[0] && e.nestedErrors[0].param) || 'field';
+        return { field: inferredField, message: e.msg, value: e.value };
+      });
       // Derive a helpful top-level message from the first field error so
       // consumers that only read `error.message` get useful feedback.
       const topMessage = (formatted[0] && formatted[0].message) ? String(formatted[0].message) : 'Validation failed';

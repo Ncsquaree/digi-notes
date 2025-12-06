@@ -6,18 +6,21 @@ import Subjects from './pages/Subjects';
 import Library from './pages/Library';
 import Templates from './pages/Templates';
 import Tools from './pages/Tools';
+import VideoPlayer from './pages/VideoPlayer';
 import { useAuth } from './context/AuthContext';
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
-  return user ? children : <Navigate to="/" replace />;
+  return user ? children : <Navigate to="/login" replace />;
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
+      {/* Explicit login route so /login works */}
+      <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route
         path="/dashboard"
@@ -59,6 +62,8 @@ export default function App() {
           </PrivateRoute>
         }
       />
+      {/* Video preview route (public) */}
+      <Route path="/video" element={<VideoPlayer />} />
     </Routes>
   );
 }

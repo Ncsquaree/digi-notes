@@ -117,7 +117,7 @@ async function _pollAiStatusAndPersist(taskId, noteId, userId) {
 module.exports = {
   async listNotes(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const opts = { limit: req.query.limit ? Number(req.query.limit) : undefined, offset: req.query.offset ? Number(req.query.offset) : undefined, filters: {} };
       if (req.query.subjectId) opts.filters.subject_id = req.query.subjectId;
       if (req.query.chapterId) opts.filters.chapter_id = req.query.chapterId;
@@ -134,7 +134,7 @@ module.exports = {
 
   async getNote(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const noteId = req.params.id;
       const note = await NoteService.getNoteById(noteId, userId);
       if (!note) throw new NotFoundError('Note not found');
@@ -147,8 +147,13 @@ module.exports = {
 
   async createNote(req, res, next) {
     try {
-      const userId = req.user.id;
-      const payload = { subject_id: req.body.subjectId || null, chapter_id: req.body.chapterId || null, title: req.body.title, original_image_url: req.body.originalImageUrl };
+      const userId = (req.user && (req.user.id || req.user.userId));
+      const payload = {
+        subject_id: req.body.subjectId || req.body.subject_id || null,
+        chapter_id: req.body.chapterId || req.body.chapter_id || null,
+        title: req.body.title,
+        original_image_url: req.body.originalImageUrl || req.body.original_image_url || null,
+      };
       const created = await NoteService.createNote(userId, payload);
       return res.status(201).json({ success: true, note: created });
     } catch (err) {
@@ -158,7 +163,7 @@ module.exports = {
 
   async updateNote(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const noteId = req.params.id;
       const fields = {};
       if (typeof req.body.title !== 'undefined') fields.title = req.body.title;
@@ -173,7 +178,7 @@ module.exports = {
 
   async deleteNote(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const noteId = req.params.id;
       await NoteService.deleteNote(noteId, userId);
       return res.json({ success: true });
@@ -184,7 +189,7 @@ module.exports = {
 
   async processNote(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const noteId = req.params.id;
 
       const note = await NoteService.getNoteById(noteId, userId);
@@ -221,34 +226,49 @@ module.exports = {
         logger.logError(err, { noteId, userId, fn: 'persist_task_id' });
       }
 
-      const payload = { task_id: taskId, user_id: userId, note_id: noteId, s3_key, options: req.body.options || {}, await_result: false };
+      const options = req.body ? (req.body.options || {}) : {};
+      const payload = { task_id: taskId, user_id: userId, note_id: noteId, s3_key, options, await_result: false };
 
       // Fire-and-forget: POST to AI service and then poll status in background
       const requestId = req.id || (req.headers && req.headers['x-request-id']) || taskId;
-      axios.post(`${AI_SERVICE_URL}/process-note`, payload, { timeout: AI_SERVICE_TIMEOUT, headers: { 'Content-Type': 'application/json', 'X-Request-ID': requestId } })
-        .then(() => {
-          // start polling asynchronously (do not await)
-          (async () => {
-            try {
-              await _pollAiStatusAndPersist(taskId, noteId, userId);
-            } catch (err) {
-              logger.logError(err, { noteId, taskId, userId, fn: 'background_poll' });
-              try { await NoteService.updateNoteProcessingStatus(noteId, 'failed', 'Background processing error'); } catch(e){}
-            }
-          })();
-        })
-        .catch(async (err) => {
-          // immediate failure to call AI service
-          logger.logError(err, { noteId, taskId, userId, fn: 'init_ai_call' });
-          const msg = err.response ? (err.response.data && err.response.data.error) || 'AI service error' : err.message;
-          try { await NoteService.updateNoteProcessingStatus(noteId, 'failed', msg); } catch(e){}
-        });
+      try {
+        const postPromise = (axios && typeof axios.post === 'function') ? axios.post(`${AI_SERVICE_URL}/process-note`, payload, { timeout: AI_SERVICE_TIMEOUT, headers: { 'Content-Type': 'application/json', 'X-Request-ID': requestId } }) : Promise.resolve();
+        // schedule background polling when the POST resolves
+        // schedule background polling when the POST resolves
+        postPromise
+          .then(() => {
+            (async () => {
+              try {
+                await _pollAiStatusAndPersist(taskId, noteId, userId);
+              } catch (err) {
+                logger.logError(err, { noteId, taskId, userId, fn: 'background_poll' });
+                try { await NoteService.updateNoteProcessingStatus(noteId, 'failed', 'Background processing error'); } catch (e) {}
+              }
+            })();
+          })
+          .catch(async (err) => {
+            // immediate failure to call AI service
+            logger.logError(err, { noteId, taskId, userId, fn: 'init_ai_call' });
+            const msg = err && err.response ? (err.response.data && err.response.data.error) || 'AI service error' : (err && err.message) || 'AI service error';
+            try { await NoteService.updateNoteProcessingStatus(noteId, 'failed', msg); } catch (e) {}
+          });
+      } catch (err) {
+        // defensive: log but do not block returning accepted to the client
+        logger.logError(err, { noteId, taskId, userId, fn: 'schedule_ai_post' });
+      }
       
       
 
-      // Return canonical response expected by callers/tests
+      // Return canonical response expected by callers/tests immediately
       const data = markResult || { processing_task_id: taskId };
-      return res.status(202).json({ success: true, data });
+      // send accepted response before background work to make endpoint fast and deterministic
+      try {
+        res.status(202).json({ success: true, data });
+      } catch (e) {
+        // ignore send errors and continue with background work
+      }
+
+      // continue background orchestration (do not await)
     } catch (err) {
       next(err);
     }
@@ -256,7 +276,7 @@ module.exports = {
 
   async getProcessingStatus(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const noteId = req.params.id;
       // Prefer service helper if available (tests expect NoteService.getProcessingStatus)
       if (typeof NoteService.getProcessingStatus === 'function') {

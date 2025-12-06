@@ -46,6 +46,12 @@ router.get('/', validate(listFlashcardsValidation), flashcardController.listFlas
 router.get('/due', validate(dueFlashcardsValidation), flashcardController.getDueFlashcards);
 
 /**
+ * Stats route must be defined before the param-based routes so `/stats` is not
+ * incorrectly routed to `/:id`.
+ */
+router.get('/stats', flashcardController.getFlashcardStats);
+
+/**
  * @openapi
  * /api/flashcards/{id}:
  *   get:

@@ -24,7 +24,15 @@ app.set('trust proxy', true);
 // Middleware
 app.use(helmet());
 const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors({ origin: corsOrigins.length ? corsOrigins : true }));
+const corsOptions = {
+  origin: corsOrigins.length ? corsOrigins : true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id']
+};
+app.use(cors(corsOptions));
+// Ensure preflight requests are handled for all routes
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: process.env.VALIDATION_MAX_BODY_SIZE || '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: process.env.VALIDATION_MAX_BODY_SIZE || '10mb' }));
 

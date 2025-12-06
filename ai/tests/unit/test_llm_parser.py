@@ -38,7 +38,7 @@ def test_parse_too_long_text_raises():
 def test_parse_invalid_json_raises(monkeypatch):
     # simulate OpenAI returning a function_call with invalid JSON
     def fake_create(*args, **kwargs):
-        return {'choices': [{'message': {'function_call': {'name': 'parsed_content', 'arguments': '{invalid json'}}}]}, 'usage': {}}
+        return {'choices': [{'message': {'function_call': {'name': 'parsed_content', 'arguments': '{invalid json}'}}}], 'usage': {}}
 
     monkeypatch.setattr(openai.ChatCompletion, 'create', staticmethod(fake_create))
     parser = LLMParser.get_instance()

@@ -73,6 +73,26 @@ The backend uses AWS SDK v3 for S3 operations via `S3Service`:
 
 See `docs/aws_setup.md` for S3 bucket and IAM configuration.
 
+## Dockerfile Notes (UID conflict fix)
+
+The Dockerfile previously attempted to create a custom `nodeuser` with UID
+1000 which conflicted with the built-in `node` user present in the base
+`node:18-alpine` image. This caused builds to fail with:
+
+```
+adduser: uid '1000' in use
+```
+
+Fix applied:
+- Use the built-in `node` user instead of creating custom users.
+- Remove `adduser` / `addgroup` and associated `chown` steps.
+- Use `USER node` after copying files into the image.
+
+If you encounter `adduser: uid '1000' in use` locally, ensure the
+Dockerfile does not attempt to create a user with a hardcoded UID. Use the
+existing `node` user that ships with the official Node.js Alpine image.
+
+
 ### Environment Variables
 
 Required AWS variables in `backend/.env`:

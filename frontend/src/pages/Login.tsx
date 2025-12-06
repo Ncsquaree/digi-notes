@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import { parseApiError } from '../utils/errors';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Array<{field: string; message: string}>>([]);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -20,8 +22,9 @@ export default function Login() {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to login';
-      setError(msg);
+      const parsed = parseApiError(err);
+      setError(parsed.message || err?.message || 'Failed to login');
+      setValidationErrors(parsed.validationErrors || []);
     } finally {
       setLoading(false);
     }
@@ -39,7 +42,18 @@ export default function Login() {
         </div>
         <h1 className="text-2xl font-semibold mb-2">Welcome back</h1>
         <p className="text-sm text-gray-400 mb-6">Sign in to continue building your smart notes.</p>
-        {error && <div className="mb-3 text-xs text-red-400 bg-red-950/40 border border-red-500/40 rounded-xl px-3 py-2">{error}</div>}
+        {error && (
+          <div className="mb-3 text-xs text-red-400 bg-red-950/40 border border-red-500/40 rounded-xl px-3 py-2">
+            <div className="font-semibold mb-1">{error}</div>
+            {validationErrors.length > 0 && (
+              <ul className="list-none space-y-0.5 mt-2 text-red-300">
+                {validationErrors.map((err, idx) => (
+                  <li key={idx}>• {err.message}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
             label="Email"

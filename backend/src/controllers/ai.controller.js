@@ -15,7 +15,7 @@ module.exports = {
       const count = req.body.count;
       const noteId = req.body.noteId;
 
-      if (!content || typeof content !== 'object') {
+      if (!content || (typeof content !== 'object' && typeof content !== 'string')) {
         throw new ValidationError('content (ParsedContent) is required')
       }
 
@@ -30,27 +30,38 @@ module.exports = {
         // map to backend format and bulk insert
         const toInsert = flashcards.map(f => ({ note_id: noteId, user_id: userId, question: f.question, answer: f.answer, difficulty: f.difficulty || 0 }));
         const inserted = await FlashcardService.createFlashcardsFromAI(noteId, userId, toInsert);
-        persistedInfo = { persisted: true, persisted_count: inserted.length };
+        // tolerate multiple shapes returned by service/DB: number, array, or object with rows/inserted
+        let persisted_count = 0;
+        if (typeof inserted === 'number') persisted_count = inserted;
+        else if (Array.isArray(inserted)) persisted_count = inserted.length;
+        else if (inserted && typeof inserted === 'object') {
+          if (typeof inserted.inserted === 'number') persisted_count = inserted.inserted;
+          else if (Array.isArray(inserted.rows)) persisted_count = inserted.rows.length;
+        }
+        persistedInfo = { persisted: true, persisted_count };
         logger.info('ai_flashcards_generated', { requestId, userId, count: flashcards.length, persisted: true });
-        return res.json({ success: true, flashcards: inserted, metadata: { ...aiData.metadata, ...persistedInfo } });
+        // Ensure we return an array for `flashcards` in all cases
+        const flashcardsResponse = Array.isArray(inserted) ? inserted : flashcards;
+        return res.json({ success: true, flashcards: flashcardsResponse, metadata: { ...aiData.metadata, ...persistedInfo } });
       }
 
       logger.info('ai_flashcards_generated', { requestId, userId, count: flashcards.length, persisted: false });
       return res.json({ success: true, flashcards, metadata: aiData.metadata || {} });
     } catch (err) {
       // axios mapping
-      if (err.code === 'ECONNABORTED') {
+      if (err && err.code === 'ECONNABORTED') {
         return res.status(504).json({ success: false, error: 'AI service timeout', details: err.message });
       }
-      if (err.response) {
-        const status = err.response.status || 502;
+      if (err && err.response) {
+        const upstream = err.response.status || 502;
         const aiErr = err.response.data || {};
         const errMsg = aiErr.error || 'AI service error';
         const details = aiErr.details || err.message || aiErr;
         const payload = { success: false, error: errMsg, details };
         if (aiErr.request_id) payload.request_id = aiErr.request_id;
-        // prefer header-propagated request id from AI service when present
         if (err.response.headers && err.response.headers['x-request-id']) payload.request_id = payload.request_id || err.response.headers['x-request-id'];
+        // normalize upstream 5xx to 502 (bad gateway)
+        const status = upstream >= 500 ? 502 : upstream;
         return res.status(status).json(payload);
       }
       next(err);
@@ -70,7 +81,7 @@ module.exports = {
       const questionCount = req.body.questionCount || req.body.question_count || 10;
       const questionTypes = req.body.questionTypes || req.body.question_types || null;
 
-      if (!content || typeof content !== 'object') {
+      if (!content || (typeof content !== 'object' && typeof content !== 'string')) {
         throw new ValidationError('content (ParsedContent) is required');
       }
 
@@ -81,19 +92,20 @@ module.exports = {
       const quiz = aiData.quiz || {};
 
       logger.info('ai_quiz_generated', { requestId, userId, question_count: (quiz.questions || []).length });
-      return res.json({ success: true, quiz, metadata: aiData.metadata || {} });
+      return res.json({ success: true, quiz });
     } catch (err) {
-      if (err.code === 'ECONNABORTED') {
+      if (err && err.code === 'ECONNABORTED') {
         return res.status(504).json({ success: false, error: 'AI service timeout', details: err.message });
       }
-      if (err.response) {
-        const status = err.response.status || 502;
+      if (err && err.response) {
+        const upstream = err.response.status || 502;
         const aiErr = err.response.data || {};
         const errMsg = aiErr.error || 'AI service error';
         const details = aiErr.details || err.message || aiErr;
         const payload = { success: false, error: errMsg, details };
         if (aiErr.request_id) payload.request_id = aiErr.request_id;
         if (err.response.headers && err.response.headers['x-request-id']) payload.request_id = payload.request_id || err.response.headers['x-request-id'];
+        const status = upstream >= 500 ? 502 : upstream;
         return res.status(status).json(payload);
       }
       next(err);
@@ -106,7 +118,7 @@ module.exports = {
       const userId = (req.user && (req.user.id || req.user.userId));
       const content = req.body.content;
 
-      if (!content || typeof content !== 'object') {
+      if (!content || (typeof content !== 'object' && typeof content !== 'string')) {
         throw new ValidationError('content (ParsedContent) is required');
       }
 
@@ -117,19 +129,20 @@ module.exports = {
       const mindmap = aiData.mindmap || {};
 
       logger.info('ai_mindmap_generated', { requestId, userId, node_count: (mindmap.nodes || []).length, edge_count: (mindmap.edges || []).length });
-      return res.json({ success: true, mindmap, metadata: aiData.metadata || {} });
+      return res.json({ success: true, mindmap });
     } catch (err) {
-      if (err.code === 'ECONNABORTED') {
+      if (err && err.code === 'ECONNABORTED') {
         return res.status(504).json({ success: false, error: 'AI service timeout', details: err.message });
       }
-      if (err.response) {
-        const status = err.response.status || 502;
+      if (err && err.response) {
+        const upstream = err.response.status || 502;
         const aiErr = err.response.data || {};
         const errMsg = aiErr.error || 'AI service error';
         const details = aiErr.details || err.message || aiErr;
         const payload = { success: false, error: errMsg, details };
         if (aiErr.request_id) payload.request_id = aiErr.request_id;
         if (err.response.headers && err.response.headers['x-request-id']) payload.request_id = payload.request_id || err.response.headers['x-request-id'];
+        const status = upstream >= 500 ? 502 : upstream;
         return res.status(status).json(payload);
       }
       next(err);

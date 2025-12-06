@@ -8,15 +8,15 @@ RUN npm ci
 
 FROM node:18-alpine
 RUN apk add --no-cache curl
-RUN addgroup -S nodegroup && adduser -S nodeuser -G nodegroup -u 1000
 WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY . /app
-RUN chown -R nodeuser:nodegroup /app
+ENV NODE_ENV=production
+RUN chmod +x /app/validate-and-start.sh || true
+USER node
+WORKDIR /app
 ENV NODE_ENV=production
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl -f http://localhost:5000/health || exit 1
 # Ensure the startup wrapper is executable and run it as the container CMD
-RUN chmod +x /app/validate-and-start.sh || true
-USER nodeuser
 CMD ["sh","/app/validate-and-start.sh"]

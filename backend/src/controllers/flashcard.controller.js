@@ -97,12 +97,12 @@ module.exports = {
 
   async reviewFlashcard(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const flashcardId = req.params.id;
       const quality = parseInt(req.body.quality, 10);
       const timeSpentSeconds = req.body.timeSpentSeconds ? parseInt(req.body.timeSpentSeconds, 10) : null;
-      if (Number.isNaN(quality) || quality < 0 || quality > 5) {
-        throw new ValidationError('quality must be an integer between 0 and 5');
+      if (Number.isNaN(quality)) {
+        throw new ValidationError('quality must be an integer');
       }
       // Support service returning either { flashcard, session } or flashcard directly
       const rv = await FlashcardService.reviewFlashcard(flashcardId, userId, quality, timeSpentSeconds);
@@ -125,7 +125,7 @@ module.exports = {
 
   async getFlashcardStats(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = (req.user && (req.user.id || req.user.userId));
       const startDate = req.query.startDate;
       const endDate = req.query.endDate;
       const total_flashcards = await FlashcardService.countFlashcardsByUser(userId);

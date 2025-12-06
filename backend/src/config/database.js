@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
 const pool = new Pool({
-  host: process.env.DB_HOST || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT || 5432),
   database: process.env.DB_NAME || 'digi_notes',
   user: process.env.DB_USER || 'postgres',

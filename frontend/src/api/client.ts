@@ -13,18 +13,32 @@ export const apiClient = axios.create({
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   if (tokens.accessToken) localStorage.setItem('accessToken', tokens.accessToken);
+  // Compatibility alias: some code expects `token`
+  if (tokens.accessToken) localStorage.setItem('token', tokens.accessToken);
   if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+  // Also set axios default Authorization header so in-memory axios instance
+  // immediately uses the new token for subsequent requests.
+  if (tokens.accessToken) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+  }
 }
 
 export function clearAuthTokens() {
   localStorage.removeItem('accessToken');
+  localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
+  try {
+    delete apiClient.defaults.headers.common['Authorization'];
+  } catch (e) {
+    // ignore
+  }
 }
 
 // Request interceptor: attach access token
 apiClient.interceptors.request.use((config) => {
   try {
-    const token = localStorage.getItem('accessToken');
+    // Read token at request time; support both 'accessToken' and legacy 'token'
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     if (token) {
       config.headers = config.headers || {};
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment

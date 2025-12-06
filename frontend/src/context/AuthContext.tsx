@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient, { setAuthTokens, clearAuthTokens } from '../api/client';
+import { parseApiError } from '../utils/errors';
 
 type User = {
   id: string;
@@ -19,6 +20,21 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper: normalize user-like objects by ensuring `name` exists when possible
+function normalizeUser(user: any) {
+  if (!user || typeof user !== 'object') return user;
+  if (user.name) return user;
+  const fn = user.firstName || user.first_name || '';
+  const ln = user.lastName || user.last_name || '';
+  const combined = [fn, ln].filter(Boolean).join(' ').trim();
+  if (combined) {
+    // Mutate shallowly to preserve references used elsewhere
+    // but return the object for clarity
+    user.name = combined;
+  }
+  return user;
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +42,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const init = async () => {
-      const token = localStorage.getItem('accessToken');
+      // Support both 'accessToken' and legacy 'token' localStorage keys
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
       if (!token) {
         setLoading(false);
         return;
@@ -34,7 +51,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       try {
         const resp = await apiClient.get('/auth/me');
-        setUser(resp.data.user ?? resp.data);
+        // Backend returns { success: true, data: { user: {...} } }
+        // Unwrap the common `data` wrapper first for compatibility
+        const payload = resp.data?.data ?? resp.data;
+        const userData = normalizeUser(payload?.user ?? payload);
+        setUser(userData);
       } catch (e) {
         clearAuthTokens();
         setUser(null);
@@ -47,25 +68,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const resp = await apiClient.post('/auth/login', { email, password });
-    const data = resp.data || {};
-    const accessToken = data.accessToken ?? data.tokens?.accessToken;
-    const refreshToken = data.refreshToken ?? data.tokens?.refreshToken;
-    const userData = data.user ?? data;
+    try {
+      const resp = await apiClient.post('/auth/login', { email, password });
+      // Backend returns { success: true, data: { user, accessToken, refreshToken } }
+      const payload = resp.data?.data ?? resp.data;
+      const accessToken = payload?.accessToken ?? payload?.tokens?.accessToken;
+      const refreshToken = payload?.refreshToken ?? payload?.tokens?.refreshToken;
+      const userData = normalizeUser(payload?.user ?? payload);
 
-    if (accessToken) setAuthTokens({ accessToken, refreshToken });
-    setUser(userData);
+      if (accessToken) setAuthTokens({ accessToken, refreshToken });
+      setUser(userData);
+    } catch (err: any) {
+      // Re-throw the original axios error so pages can parse it with parseApiError
+      throw err;
+    }
   };
 
   const signup = async (email: string, password: string, name?: string) => {
-    const resp = await apiClient.post('/auth/register', { email, password, name });
-    const data = resp.data || {};
-    const accessToken = data.accessToken ?? data.tokens?.accessToken;
-    const refreshToken = data.refreshToken ?? data.tokens?.refreshToken;
-    const userData = data.user ?? data;
+    try {
+      // Map frontend `name` to backend `firstName` to satisfy strict validation
+      const resp = await apiClient.post('/auth/register', { email, password, firstName: name });
+      // Backend returns { success: true, data: { user, accessToken, refreshToken } }
+      const payload = resp.data?.data ?? resp.data;
+      const accessToken = payload?.accessToken ?? payload?.tokens?.accessToken;
+      const refreshToken = payload?.refreshToken ?? payload?.tokens?.refreshToken;
+      const userData = normalizeUser(payload?.user ?? payload);
 
-    if (accessToken) setAuthTokens({ accessToken, refreshToken });
-    setUser(userData);
+      if (accessToken) setAuthTokens({ accessToken, refreshToken });
+      setUser(userData);
+    } catch (err: any) {
+      // Re-throw the original axios error so pages can parse it with parseApiError
+      throw err;
+    }
   };
 
   const logout = async () => {
