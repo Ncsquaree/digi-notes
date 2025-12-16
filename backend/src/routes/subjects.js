@@ -17,7 +17,11 @@ const {
  *     description: Subject and course management
  */
 // All subject routes require authentication
-router.use(authenticate);
+// Allow OPTIONS preflight to bypass auth so CORS middleware can respond
+router.use((req, res, next) => {
+	if (req.method === 'OPTIONS') return next();
+	return authenticate(req, res, next);
+});
 
 const subjectController = require('../controllers/subject.controller');
 

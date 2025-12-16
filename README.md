@@ -25,25 +25,111 @@ Prerequisites
 - OpenAI API key (or alternative LLM credentials)
 - Node.js 18+ and Python 3.10+ for local development
 
-Quick start
-1. Clone repository
-2. Copy `.env.example` to `.env` and update values
-3. Copy `backend/.env.example` to `backend/.env` and update values
-4. Copy `ai/.env.example` to `ai/.env` and update values
+## How to Run the Digi Notes Application Locally
 
-S3 Setup
+The app consists of 4 main parts: **Frontend** (React/Vite), **Backend** (Node.js/Express), **AI Service** (Python/FastAPI), and **Databases** (Postgres + Redis). Use Docker Compose for backend/AI/DB (recommended) + separate frontend dev server.
 
-4. Set up AWS S3 bucket and IAM user (see `docs/aws_setup.md` for detailed instructions):
-	- Create S3 bucket (e.g., `digi-notes-uploads-dev`)
-	- Create IAM user with S3 access policy
-	- Add AWS credentials to `.env` files
+### Prerequisites for Local Setup
+- Docker & Docker Compose (for services)
+- Node.js 18+ (for frontend/backend dev)
+- AWS Account: S3 bucket + IAM keys (for uploads/OCR fallback)
+- OpenAI API Key (for LLM parsing/summaries/flashcards)
+- Git/Bash/PowerShell on Windows
 
-5. Run:
+### Step 1: Environment Setup
+
+Copy and edit `.env` files (fill secrets, never commit real values):
+
+```bash
+# Root
+cp .env.example .env  # Common vars (DB/Redis/Neptune)
+
+# Backend
+cp backend/.env.example backend/.env  # DB, JWT_SECRET, AWS keys, AI_SERVICE_URL=http://localhost:8000
+
+# AI
+cp ai/.env.example ai/.env  # OpenAI key, AWS, TROCR_DEVICE=cpu (or cuda for GPU)
+
+# Frontend (create if missing)
+cat > frontend/.env << EOF
+VITE_API_URL=http://localhost:5000
+EOF
 ```
-docker-compose up --build
+
+**Key Secrets to Set:**
+- `POSTGRES_PASSWORD` (e.g., mypassword123)
+- `JWT_SECRET` / `JWT_REFRESH_SECRET` (generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_S3_BUCKET`
+- `OPENAI_API_KEY=sk-...`
+
+### Step 2: Database Setup
+
+```bash
+docker-compose up postgres redis  # Start DBs first (or all)
+cd backend
+npm install
+npm run db:migrate  # Run migrations (node-pg-migrate)
 ```
-6. Access backend: `http://localhost:5000`
-7. Access AI service docs: `http://localhost:8000/docs`
+
+### Step 3: Run Services
+
+#### Option A: Docker (Recommended - Full Stack Backend/AI/DB)
+
+```bash
+docker-compose up --build -d  # Detached: postgres(5432), redis(6379), backend(5000), ai(8000)
+```
+
+**Check Health:**
+- Backend: `curl http://localhost:5000/health`
+- AI: `curl http://localhost:8000/health`
+- Logs: `docker-compose logs -f`
+
+#### Option B: Local Dev (No Docker for Services)
+
+```bash
+# Terminal 1: Backend
+cd backend && npm run dev  # http://localhost:5000
+
+# Terminal 2: AI
+cd ai && pip install -r requirements.txt && uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Ensure Postgres/Redis running locally
+```
+
+### Step 4: Run Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev  # http://localhost:3000 (Vite dev server)
+```
+
+### Step 5: Test the App
+
+1. Open `http://localhost:3000`
+2. Signup/Login (JWT auto-handled)
+3. Dashboard → Subjects → Add subjects/chapters/notes
+4. Tools → Upload image → Process (OCR → AI → Flashcards/Quiz)
+
+### Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| DB Connection Failed | Check `DB_HOST=localhost` (local) or `postgres` (docker), password matches |
+| AWS/S3 Errors | Verify bucket exists, IAM policy allows `s3:PutObject`/`GetObject`, region matches |
+| OpenAI Fails | Set valid `OPENAI_API_KEY`, check rate limits |
+| CORS Errors | Update `CORS_ORIGIN` in `backend/.env` to include `http://localhost:3000` |
+| AI Model Download Slow | First run downloads TrOCR (~1GB), use GPU for speed (`TROCR_DEVICE=cuda`) |
+| Migrations Fail | Run `npm run db:migrate` after DB up |
+
+**Stop all services:**
+```bash
+docker-compose down -v  # removes volumes/DB data
+```
+
+For additional docs: see `docs/setup_guide.md`, `docs/aws_setup.md`
+- Backend API: `http://localhost:5000/api-docs`
+- AI Service: `http://localhost:8000/docs`
 
 Development
 - Backend: `cd backend && npm install && npm run dev`
