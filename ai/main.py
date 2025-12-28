@@ -13,7 +13,21 @@ from pydantic import BaseModel, Field, validator
 import tempfile
 import pathlib
 
-from modules.ocr import TrOCRHandler, TextractHandler, preprocess_image, TrOCRModelError, TrOCRInferenceError, TextractError, ImagePreprocessingError
+from modules.ocr import (
+    TrOCRHandler,
+    TextractHandler,
+    PixtralOCR,
+    preprocess_image,
+    TrOCRModelError,
+    TrOCRInferenceError,
+    PixtralModelError,
+    PixtralInferenceError,
+    TextractError,
+    ImagePreprocessingError,
+    StructuredDocument,
+    structure_document,
+    flatten_structured_text,
+)
 from modules.ocr.preprocess import PREPROCESSING_ENABLED
 from modules.semantic import (
     parse_academic_content,
@@ -67,6 +81,7 @@ from modules.knowledge_graph import GraphBuilder, GraphQueries, NeptuneConnector
 from modules.utils import get_logger, set_request_context, get_request_context, FileHandler, FileDownloadError
 from modules.utils import log_quiz_generation, log_mindmap_generation
 from modules.utils import TaskManager, TaskStatus
+from modules.utils.logger import log_ocr_fallback
 import uuid
 from PIL import Image
 from modules.utils import TaskManager, TaskStatus
@@ -260,6 +275,45 @@ class OCRResponse(BaseModel):
     request_id: str
 
 
+class MistralOCRRequest(BaseModel):
+    s3_key: Optional[str] = None
+    s3_url: Optional[str] = None
+    use_preprocessing: bool = True
+    fallback_to_trocr: bool = True
+    max_pdf_pages: Optional[int] = Field(None, description='Max pages for PDF (default 10)')
+
+    @validator('s3_key', 's3_url', always=True)
+    def at_least_one(cls, v, values, **kwargs):
+        if not (values.get('s3_key') or values.get('s3_url') or v):
+            raise ValueError('Either s3_key or s3_url must be provided')
+        return v
+
+
+class MistralOCRResponse(BaseModel):
+    success: bool
+    text: str
+    confidence: float
+    method: str
+    preprocessing_applied: bool
+    page_count: Optional[int] = None
+    pages: Optional[List[dict]] = None
+    metadata: dict
+    request_id: str
+
+
+class OCRStructureRequest(BaseModel):
+    text: str = Field(..., description='Raw OCR text to structure')
+    options: Optional[dict] = Field(default_factory=dict)
+
+
+class OCRStructureResponse(BaseModel):
+    success: bool
+    structured_document: StructuredDocument
+    flattened_text: str
+    metadata: dict
+    request_id: str
+
+
 class SemanticParseRequest(BaseModel):
     text: str = Field(..., description='OCR extracted text to parse', max_length=int(os.getenv('LLM_PARSER_MAX_TEXT_LENGTH', '50000')))
     options: Optional[dict] = Field({}, description='Parsing options')
@@ -322,24 +376,46 @@ async def ocr_extract(req: OCRRequest, fastapi_request: Request):
             from PIL import Image
             pil_img = Image.open(local_path).convert('RGB')
 
-        # Run TrOCR
-        try:
-            trocr = TrOCRHandler.get_instance()
-            trocr_start = time.time()
-            trocr_result = trocr.extract_text(pil_img)
-            trocr_ms = int((time.time() - trocr_start) * 1000)
-            LOG.info('trocr_result', extra={'request_id': request_id, 'duration_ms': trocr_ms, 'confidence': trocr_result.get('confidence')})
-            method = 'trocr'
-            text = trocr_result.get('text', '')
-            confidence = float(trocr_result.get('confidence', 0.0))
-            model_name = trocr_result.get('model')
-            device = trocr_result.get('device')
-        except TrOCRModelError as e:
-            LOG.exception('trocr_model_error', exc_info=True)
-            return JSONResponse(status_code=500, content={'success': False, 'error': 'Model loading failed', 'details': str(e), 'request_id': request_id})
-        except TrOCRInferenceError as e:
-            LOG.exception('trocr_inference_error', exc_info=True)
-            return JSONResponse(status_code=500, content={'success': False, 'error': 'OCR inference failed', 'details': str(e), 'request_id': request_id})
+        # Run OCR: Prefer Pixtral when enabled, fallback to TrOCR
+        used_service = None
+        text = ''
+        confidence = 0.0
+        model_name = None
+        device = None
+        pixtral_enabled = os.getenv('PIXTRAL_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+        if pixtral_enabled:
+            try:
+                pix = PixtralOCR.get_instance()
+                p_start = time.time()
+                p_res = pix.extract_text(pil_img)
+                p_ms = int((time.time() - p_start) * 1000)
+                LOG.info('pixtral_result', extra={'request_id': request_id, 'duration_ms': p_ms})
+                used_service = 'pixtral'
+                text = p_res.get('text', '')
+                confidence = float(p_res.get('confidence', 0.0))
+                model_name = p_res.get('model')
+                device = p_res.get('device')
+            except (PixtralModelError, PixtralInferenceError) as e:
+                LOG.warning('pixtral_unavailable_or_failed', extra={'request_id': request_id, 'details': str(e)})
+                # fallback to TrOCR
+        if used_service is None:
+            try:
+                trocr = TrOCRHandler.get_instance()
+                t_start = time.time()
+                t_res = trocr.extract_text(pil_img)
+                t_ms = int((time.time() - t_start) * 1000)
+                LOG.info('trocr_result', extra={'request_id': request_id, 'duration_ms': t_ms, 'confidence': t_res.get('confidence')})
+                used_service = 'trocr'
+                text = t_res.get('text', '')
+                confidence = float(t_res.get('confidence', 0.0))
+                model_name = t_res.get('model')
+                device = t_res.get('device')
+            except TrOCRModelError as e:
+                LOG.exception('trocr_model_error', exc_info=True)
+                return JSONResponse(status_code=500, content={'success': False, 'error': 'Model loading failed', 'details': str(e), 'request_id': request_id})
+            except TrOCRInferenceError as e:
+                LOG.exception('trocr_inference_error', exc_info=True)
+                return JSONResponse(status_code=500, content={'success': False, 'error': 'OCR inference failed', 'details': str(e), 'request_id': request_id})
 
         # Fallback to Textract if confidence low
         try:
@@ -347,7 +423,6 @@ async def ocr_extract(req: OCRRequest, fastapi_request: Request):
         except Exception:
             threshold = 0.7
 
-        used_service = method
         textract_data = None
         if confidence < threshold and req.fallback_to_textract:
             th = TextractHandler()
@@ -399,6 +474,97 @@ async def ocr_extract(req: OCRRequest, fastapi_request: Request):
             LOG.exception('cleanup_local_failed', exc_info=True)
 
 
+@app.post('/ocr/mistral', response_model=MistralOCRResponse)
+async def ocr_mistral(req: MistralOCRRequest, fastapi_request: Request):
+    request_id = getattr(fastapi_request.state, 'request_id', None) or os.urandom(8).hex()
+    fh = FileHandler()
+    local_path = None
+    try:
+        if req.s3_key:
+            local_path = fh.download_from_s3_by_key(req.s3_key)
+        else:
+            local_path = fh.download_from_s3(req.s3_url)
+
+        file_info = fh.get_file_info(local_path)
+        is_pdf = file_info.get('mime_type') == 'application/pdf' or (file_info.get('extension', '').lower() == '.pdf')
+        pix = PixtralOCR.get_instance()
+        used_method = 'pixtral'
+
+        if is_pdf:
+            max_pages = req.max_pdf_pages or int(os.getenv('PIXTRAL_MAX_PDF_PAGES', '10'))
+            result = await asyncio.to_thread(pix.extract_text_from_pdf, local_path, max_pages, req.use_preprocessing)
+        else:
+            result = await asyncio.to_thread(pix.extract_text_from_path, local_path, req.use_preprocessing)
+
+        text = result.get('text', '')
+        confidence = float(result.get('confidence', 0.0))
+
+        threshold = float(os.getenv('MISTRAL_CONFIDENCE_THRESHOLD', '0.7'))
+        if confidence < threshold and req.fallback_to_trocr:
+            LOG.info('mistral_low_confidence_fallback', extra={'request_id': request_id, 'confidence': confidence, 'threshold': threshold})
+            if not is_pdf:
+                from PIL import Image
+                trocr = TrOCRHandler.get_instance()
+                pil_img = Image.open(local_path).convert('RGB')
+                trocr_result = await asyncio.to_thread(trocr.extract_text, pil_img)
+                text = trocr_result.get('text', text)
+                confidence = float(trocr_result.get('confidence', confidence))
+                used_method = 'trocr'
+            else:
+                LOG.warning('trocr_pdf_fallback_skipped', extra={'request_id': request_id})
+
+        return MistralOCRResponse(
+            success=True,
+            text=text,
+            confidence=confidence,
+            method=used_method,
+            preprocessing_applied=bool(result.get('preprocessing_applied', False)),
+            page_count=result.get('page_count'),
+            pages=result.get('pages'),
+            metadata={
+                'file_info': file_info,
+                'preprocessing_steps': result.get('preprocessing_steps', []),
+                'model': result.get('model'),
+                'device': result.get('device'),
+            },
+            request_id=request_id,
+        )
+    except PixtralModelError as e:
+        LOG.exception('pixtral_model_error', exc_info=True)
+        return JSONResponse(status_code=500, content={'success': False, 'error': 'Pixtral model loading failed', 'details': str(e), 'request_id': request_id})
+
+
+@app.post('/ocr/structure', response_model=OCRStructureResponse)
+async def ocr_structure(req: OCRStructureRequest, fastapi_request: Request):
+    request_id = getattr(fastapi_request.state, 'request_id', None) or os.urandom(8).hex()
+    try:
+        if not req.text or not req.text.strip():
+            return JSONResponse(status_code=400, content={'success': False, 'error': 'Empty text', 'request_id': request_id})
+        source_type = (req.options or {}).get('source_type')
+        page_count = (req.options or {}).get('page_count')
+        ocr_confidence = (req.options or {}).get('ocr_confidence')
+        llm_fallback = (req.options or {}).get('llm_fallback', False)
+        llm_threshold = float((req.options or {}).get('llm_threshold') or os.getenv('STRUCTURER_LLM_THRESHOLD', '0.6'))
+        sd: StructuredDocument = await asyncio.to_thread(structure_document, req.text, source_type, page_count, ocr_confidence, llm_fallback, llm_threshold, (req.options or {}).get('ocr_method'))
+        flattened = await asyncio.to_thread(flatten_structured_text, sd)
+        meta = {'sections': len(sd.sections), 'word_count': sd.document_metadata.word_count, 'language': sd.document_metadata.language}
+        return OCRStructureResponse(success=True, structured_document=sd, flattened_text=flattened, metadata=meta, request_id=request_id)
+    except Exception as e:
+        LOG.exception('ocr_structure_failed', exc_info=True)
+        return JSONResponse(status_code=500, content={'success': False, 'error': 'Structuring failed', 'details': str(e), 'request_id': request_id})
+    except PixtralInferenceError as e:
+        LOG.exception('pixtral_inference_error', exc_info=True)
+        return JSONResponse(status_code=500, content={'success': False, 'error': 'Pixtral OCR failed', 'details': str(e), 'request_id': request_id})
+    except FileDownloadError as e:
+        return JSONResponse(status_code=400, content={'success': False, 'error': 'File download failed', 'details': str(e), 'request_id': request_id})
+    finally:
+        if local_path:
+            try:
+                fh.cleanup_temp_file(local_path)
+            except Exception:
+                LOG.exception('cleanup_failed', exc_info=True)
+
+
 class ProcessNoteRequest(BaseModel):
     user_id: str
     task_id: Optional[str] = None
@@ -436,8 +602,9 @@ async def process_note(req: ProcessNoteRequest, fastapi_request: Request):
         weights = {
             'download': 5,
             'ocr': 25,
-            'parse': 20,
-            'summarize': 20,
+            'structure': 10,
+            'parse': 15,
+            'summarize': 15,
             'graph': 15,
             'flashcards': 10,
             'finalize': 5,
@@ -470,41 +637,146 @@ async def process_note(req: ProcessNoteRequest, fastapi_request: Request):
             step = 'ocr'
             try:
                 pil_img = Image.open(local_path).convert('RGB')
-                trocr = TrOCRHandler.get_instance()
-                ocr_res = await asyncio.to_thread(trocr.extract_text, pil_img)
-                used_service = 'trocr'
-                text = ocr_res.get('text', '')
-                confidence = float(ocr_res.get('confidence', 0.0))
-
-                # fallback to textract when low confidence and requested
+                pixtral_enabled = os.getenv('PIXTRAL_ENABLED', 'true').lower() in ('1', 'true', 'yes')
                 try:
-                    threshold = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7'))
+                    pixtral_threshold = float(os.getenv('PIXTRAL_CONFIDENCE_THRESHOLD', '0.75'))
                 except Exception:
-                    threshold = 0.7
+                    pixtral_threshold = 0.75
+                try:
+                    textract_threshold = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.7'))
+                except Exception:
+                    textract_threshold = 0.7
 
-                if confidence < threshold and (req.options or {}).get('fallback_to_textract', True):
+                used_service = None
+                text = ''
+                confidence = 0.0
+                preprocessing_steps = []
+                fallback_chain = []
+
+                # Primary: Pixtral
+                if pixtral_enabled:
+                    try:
+                        pix = PixtralOCR.get_instance()
+                        pix_res = await asyncio.to_thread(pix.extract_text, pil_img)
+                        text = pix_res.get('text', '')
+                        confidence = float(pix_res.get('confidence', 0.0))
+                        used_service = 'pixtral'
+                        preprocessing_steps = pix_res.get('preprocessing_steps', [])
+                        fallback_chain.append('pixtral')
+                        LOG.info('pixtral_ocr_success', extra={'task_id': task_id, 'confidence': confidence})
+                    except (PixtralModelError, PixtralInferenceError) as e:
+                        fallback_chain.append('pixtral_failed')
+                        LOG.warning('pixtral_ocr_failed', extra={'task_id': task_id, 'error': str(e)})
+
+                # Fallback 1: TrOCR
+                if used_service is None or confidence < pixtral_threshold:
+                    try:
+                        trocr = TrOCRHandler.get_instance()
+                        trocr_res = await asyncio.to_thread(trocr.extract_text, pil_img)
+                        trocr_text = trocr_res.get('text', '')
+                        trocr_conf = float(trocr_res.get('confidence', 0.0))
+                        fallback_chain.append('trocr')
+                        if trocr_conf > confidence:
+                            text = trocr_text
+                            confidence = trocr_conf
+                            used_service = 'trocr'
+                        LOG.info('trocr_fallback_used', extra={'task_id': task_id, 'confidence': trocr_conf})
+                    except (TrOCRModelError, TrOCRInferenceError) as e:
+                        fallback_chain.append('trocr_failed')
+                        LOG.warning('trocr_fallback_failed', extra={'task_id': task_id, 'error': str(e)})
+
+                # Fallback 2: Textract
+                if confidence < textract_threshold and (req.options or {}).get('fallback_to_textract', True):
                     th = TextractHandler()
                     if th.is_enabled():
-                        tex = await asyncio.to_thread(th.extract_text_from_local, local_path)
-                        if tex:
-                            used_service = 'textract'
-                            text = tex.get('text', text)
-                            confidence = float(tex.get('confidence', confidence))
+                        try:
+                            textract_data = await asyncio.to_thread(th.extract_text_from_local, local_path)
+                            fallback_chain.append('textract')
+                            if textract_data:
+                                tex_text = textract_data.get('text', '')
+                                tex_conf = float(textract_data.get('confidence', 0.0))
+                                if tex_conf > confidence:
+                                    text = tex_text
+                                    confidence = tex_conf
+                                    used_service = 'textract'
+                                LOG.info('textract_fallback_used', extra={'task_id': task_id, 'confidence': tex_conf})
+                        except TextractError as e:
+                            fallback_chain.append('textract_failed')
+                            LOG.warning('textract_fallback_failed', extra={'task_id': task_id, 'error': str(e)})
+                    else:
+                        fallback_chain.append('textract_unavailable')
 
-                result_bundle['ocr'] = {'text': text, 'confidence': confidence, 'service': used_service}
+                if used_service is None:
+                    raise RuntimeError('All OCR methods failed')
+
+                result_bundle['ocr'] = {
+                    'text': text,
+                    'confidence': confidence,
+                    'service': used_service,
+                    'preprocessing_steps': preprocessing_steps,
+                    'fallback_chain': fallback_chain,
+                }
                 total_done += weights[step]
                 tm.update_progress(task_id, step, total_done, result_bundle['ocr'])
                 tm.mark_step_complete(task_id, step, result_bundle['ocr'])
+                try:
+                    log_ocr_fallback(task_id, fallback_chain, used_service, confidence)
+                except Exception:
+                    LOG.warning('log_ocr_fallback_failed', exc_info=True)
             except Exception as e:
                 tm.mark_step_failed(task_id, step, str(e))
                 # OCR is critical; fail
                 tm.fail_task(task_id, f'ocr failed: {e}')
                 return result_bundle
 
+            # 2b) Structure OCR (optional)
+            step = 'structure'
+            try:
+                if (req.options or {}).get('enable_structurer', True):
+                    sd: StructuredDocument = await asyncio.to_thread(
+                        structure_document,
+                        text,
+                        (result_bundle.get('file_info') or {}).get('mime_type'),
+                        None,
+                        confidence,
+                        (req.options or {}).get('llm_fallback', False),
+                        float((req.options or {}).get('llm_threshold') or os.getenv('STRUCTURER_LLM_THRESHOLD', '0.6')),
+                        (result_bundle.get('ocr') or {}).get('service'),
+                    )
+                    # store both structured and a flattened convenience text
+                    flattened = await asyncio.to_thread(flatten_structured_text, sd)
+                    result_bundle['structured'] = {
+                        'document': sd.model_dump(),
+                        'flattened_text': flattened,
+                        'ocr_metadata': {
+                            'service': (result_bundle.get('ocr') or {}).get('service'),
+                            'confidence': (result_bundle.get('ocr') or {}).get('confidence'),
+                            'preprocessing_steps': (result_bundle.get('ocr') or {}).get('preprocessing_steps', []),
+                        },
+                    }
+                    total_done += weights[step]
+                    tm.update_progress(task_id, step, total_done, {'sections': len(sd.sections), 'word_count': sd.document_metadata.word_count})
+                    tm.mark_step_complete(task_id, step, {'sections': len(sd.sections)})
+                else:
+                    total_done += weights[step]
+                    tm.update_progress(task_id, step, total_done, {'skipped': True})
+            except Exception as e:
+                tm.mark_step_failed(task_id, step, str(e))
+                # Structuring is non-critical; continue based on flag
+                if os.getenv('PROCESS_NOTE_CONTINUE_ON_ERROR', 'true').lower() in ('1', 'true', 'yes'):
+                    result_bundle['structured'] = None
+                    total_done += weights[step]
+                    tm.update_progress(task_id, step, total_done, {'skipped': True})
+                else:
+                    tm.fail_task(task_id, f'structure failed: {e}')
+                    return result_bundle
+
             # 3) Parse semantic
             step = 'parse'
             try:
-                parsed = await asyncio.to_thread(parse_academic_content, text, request_id)
+                # Prefer flattened structured text if available
+                parse_text = (result_bundle.get('structured') or {}).get('flattened_text') or text
+                parsed = await asyncio.to_thread(parse_academic_content, parse_text, request_id)
                 result_bundle['parsed'] = parsed.model_dump() if hasattr(parsed, 'model_dump') else dict(parsed)
                 total_done += weights[step]
                 tm.update_progress(task_id, step, total_done, {'parsed_summary': len(str(result_bundle['parsed']))})

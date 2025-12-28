@@ -1,0 +1,33 @@
+{
+  "flashcards": [
+    {
+      "question": "What is photosynthesis?",
+      "answer": "The process by which green plants use sunlight to synthesize foods with chlorophyll",
+      "difficulty": 1,
+      "context": "Biology - Plant Processes"
+    },
+    {
+      "question": "What are the two main stages of photosynthesis?",
+      "answer": "Light-dependent reactions and light-independent reactions (Calvin cycle)",
+      "difficulty": 2,
+      "context": "Photosynthesis"
+    },
+    {
+      "question": "What is the chemical equation for photosynthesis?",
+      "answer": "6CO2 + 6H2O + light energy → C6H12O6 + 6O2",
+      "difficulty": 3,
+      "context": "Photosynthesis - Formula"
+    }
+  ],
+  "knowledge_graph": {
+    "nodes": [
+      {"id": 1, "type": "Topic", "label": "Photosynthesis"},
+      {"id": 2, "type": "Concept", "label": "Chloroplast"},
+      {"id": 3, "type": "Formula", "label": "6CO2 + 6H2O → C6H12O6 + 6O2"}
+    ],
+    "edges": [
+      {"source": 1, "target": 2, "type": "CONTAINS"},
+      {"source": 1, "target": 3, "type": "USES"}
+    ]
+  }
+}

@@ -72,6 +72,47 @@ def mock_openai_client(monkeypatch):
 
 
 @pytest.fixture
+def mock_pixtral(monkeypatch):
+    class MockPixtral:
+        @staticmethod
+        def get_instance():
+            return MockPixtral()
+
+        def extract_text(self, image):
+            return {
+                'text': 'Sample OCR text from Pixtral',
+                'confidence': 0.92,
+                'blocks': [],
+                'model': 'pixtral-12b',
+                'device': 'cpu',
+                'preprocessing_steps': ['denoise', 'threshold'],
+            }
+
+    monkeypatch.setattr('modules.ocr.mistral_ocr.PixtralOCR', MockPixtral)
+    return MockPixtral
+
+
+@pytest.fixture
+def mock_pixtral_low_conf(monkeypatch):
+    class MockPixtralLow:
+        @staticmethod
+        def get_instance():
+            return MockPixtralLow()
+
+        def extract_text(self, image):
+            return {
+                'text': 'Low quality OCR',
+                'confidence': 0.5,
+                'blocks': [],
+                'model': 'pixtral-12b',
+                'device': 'cpu',
+            }
+
+    monkeypatch.setattr('modules.ocr.mistral_ocr.PixtralOCR', MockPixtralLow)
+    return MockPixtralLow
+
+
+@pytest.fixture
 def mock_boto3_client(monkeypatch):
     from unittest.mock import MagicMock
 

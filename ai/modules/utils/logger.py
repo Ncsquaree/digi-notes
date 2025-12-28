@@ -155,3 +155,13 @@ def log_mindmap_generation(request_id: str, node_count: int, edge_count: int, du
         'duration_ms': duration_ms,
         'cost': cost,
     })
+
+
+def log_ocr_fallback(task_id: str, chain: list, final_service: str, final_confidence: float):
+    logger = get_logger()
+    logger.info('ocr_fallback_chain', extra={
+        'task_id': task_id,
+        'chain': chain,
+        'final_service': final_service,
+        'final_confidence': final_confidence,
+    })

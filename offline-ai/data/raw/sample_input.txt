@@ -1,0 +1,14 @@
+Photosynthesis
+
+Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize foods with the help of chlorophyll. The process occurs in two main stages:
+
+1. Light-dependent reactions: These occur in the thylakoid membranes and produce ATP and NADPH.
+2. Light-independent reactions (Calvin cycle): These occur in the stroma and use ATP and NADPH to fix CO2 into glucose.
+
+Key Formula:
+6CO2 + 6H2O + light energy → C6H12O6 + 6O2
+
+Important Concepts:
+- Chloroplast: Organelle where photosynthesis occurs
+- Chlorophyll: Green pigment that absorbs light
+- Stomata: Pores for gas exchange

@@ -50,6 +50,19 @@ t_device = os.getenv('TROCR_DEVICE', 'cpu')
 if t_device not in ('cpu', 'cuda'):
     errors.append("TROCR_DEVICE must be 'cpu' or 'cuda'")
 
+# Optional: Pixtral vision model (local)
+pixtral_enabled = os.getenv('PIXTRAL_ENABLED', 'false').lower() in ('1','true','yes')
+if pixtral_enabled:
+    model_id = os.getenv('PIXTRAL_MODEL', 'mistral-community/pixtral-12b')
+    if not model_id:
+        errors.append('pixtral: PIXTRAL_MODEL not set')
+    device_hint = os.getenv('PIXTRAL_DEVICE', 'auto').lower()
+    if device_hint not in ('cpu', 'cuda', 'auto'):
+        errors.append("pixtral: PIXTRAL_DEVICE must be cpu|cuda|auto")
+    quant = os.getenv('PIXTRAL_QUANTIZATION', 'none').lower()
+    if quant not in ('none', '4bit', '8bit'):
+        errors.append("pixtral: PIXTRAL_QUANTIZATION must be none|4bit|8bit")
+
 # Validate numeric env ranges
 try:
     max_image_mb = int(os.getenv('MAX_IMAGE_SIZE_MB', '10'))

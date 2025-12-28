@@ -62,18 +62,25 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ### Overview
 
-The OCR module extracts handwritten text from note images using a local ML
-model (TrOCR) with optional preprocessing and AWS Textract as a cloud-based
-fallback. The pipeline is designed for reliability and observability: model
-loading is cached, preprocessing improves OCR accuracy on noisy scans, and
-Textract can be used when model confidence is low.
+The OCR module extracts handwritten text from note images using:
+
+- TrOCR (local HF model, GPU/CPU)
+- Mistral Pixtral (vision-language via API)
+- AWS Textract (cloud fallback)
+
+The pipeline is designed for reliability and observability: model loading is
+cached, preprocessing improves OCR accuracy on noisy scans, and Textract can be
+used when confidence is low.
 
 ### Components
 
 - `TrOCRHandler`: singleton wrapper around Hugging Face's TrOCR model. Supports
   GPU/CPU selection and caches model artifacts between requests.
 - `TextractHandler`: AWS Textract client with retry logic. Used as a fallback
-  when local OCR confidence is below the configured threshold.
+  when OCR confidence is below the configured threshold.
+- `PixtralOCR`: local vision-language OCR using the Pixtral model via
+  transformers/torch (no hosted API calls). Weights are cached under
+  `TRANSFORMERS_CACHE` (default `./models/pixtral-12b`).
 - `preprocess_image()`: denoise, threshold, and deskew pipeline implemented
   with OpenCV to improve OCR results on low-quality images.
 
@@ -91,7 +98,7 @@ Response (200):
 - `success` (bool)
 - `text` (string): extracted text
 - `confidence` (float): confidence score (0-1)
-- `method` (string): `trocr` or `textract`
+- `method` (string): `pixtral` | `trocr` | `textract`
 - `preprocessing_applied` (bool)
 - `metadata` (object): processing_time_ms, file_info, device, model_name, preprocessing_steps
 - `request_id` (string)
@@ -119,6 +126,64 @@ Relevant env vars:
 - `OCR_CONFIDENCE_THRESHOLD` - fallback threshold (0.0-1.0)
 - `PREPROCESSING_ENABLED`, `PREPROCESSING_DENOISE`, `PREPROCESSING_THRESHOLD`, `PREPROCESSING_DESKEW`
 - `AWS_TEXTRACT_ENABLED`, `AWS_TEXTRACT_MAX_PAGES`, `AWS_TEXTRACT_TIMEOUT`, `AWS_TEXTRACT_RETRY_ATTEMPTS`
+
+Pixtral (optional):
+
+- `PIXTRAL_ENABLED` - enable Pixtral handler (default: false)
+- `PIXTRAL_MODEL` - vision model id (default: `mistral-community/pixtral-12b`)
+- `PIXTRAL_DEVICE` - `cpu` | `cuda` | `auto`
+- `PIXTRAL_QUANTIZATION` - `none` | `8bit` | `4bit` (requires bitsandbytes)
+- `PIXTRAL_MAX_LENGTH` - max generated tokens for OCR output
+- `PIXTRAL_BATCH_SIZE` - batch size for local inference (usually 1)
+- `PIXTRAL_MAX_PDF_PAGES` - max PDF pages to process (default 10)
+- `PIXTRAL_PREPROCESSING_ENABLED` - enable preprocessing before Pixtral
+- `MISTRAL_CONFIDENCE_THRESHOLD` - fallback threshold (default 0.7)
+
+Notes:
+
+- When `PIXTRAL_ENABLED=true`, the service will attempt local Pixtral first and
+  fallback to TrOCR if Pixtral is unavailable or fails. Textract is still used
+  as a final fallback when `confidence < OCR_CONFIDENCE_THRESHOLD` and
+  `fallback_to_textract=true`.
+- To pre-download Pixtral weights for offline use, run
+  `python scripts/download_pixtral.py` (respects `TRANSFORMERS_CACHE`).
+
+### OCR pipeline and fallback
+
+The `/process-note` OCR step uses a cascading strategy:
+
+1. **Pixtral (primary)** — enabled when `PIXTRAL_ENABLED=true`; if confidence < `PIXTRAL_CONFIDENCE_THRESHOLD` (default 0.75) it will try TrOCR.
+2. **TrOCR (fallback 1)** — used when Pixtral is low confidence or unavailable; if confidence < `OCR_CONFIDENCE_THRESHOLD` (default 0.7) it will try Textract.
+3. **Textract (fallback 2)** — used when enabled and thresholds are not met.
+
+Response metadata includes `service`, `confidence`, `preprocessing_steps`, and a `fallback_chain` for debugging.
+
+## Mistral Pixtral OCR
+
+### Features
+- Local Pixtral-12B vision-language model for OCR
+- Multi-page PDF support (via pdf2image)
+- Integrated preprocessing (denoise, threshold, deskew)
+- Confidence-based fallback to TrOCR
+- Quantization support (4-bit/8-bit) for memory efficiency
+
+### System Requirements
+- poppler-utils must be installed for PDF support:
+  - Ubuntu/Debian: `sudo apt-get install poppler-utils`
+  - macOS: `brew install poppler`
+  - Windows: Download from [poppler releases](https://github.com/oschwartz10612/poppler-windows/releases)
+
+### Endpoints
+- `POST /ocr/mistral` - Dedicated Mistral OCR endpoint
+  - Supports images (jpg, png) and PDFs
+  - Optional preprocessing and TrOCR fallback
+  - Returns per-page metadata for PDFs
+
+### Configuration
+See `.env.example` for Pixtral-specific variables:
+- `PIXTRAL_ENABLED` - Enable/disable Pixtral OCR
+- `PIXTRAL_MAX_PDF_PAGES` - Max pages to process (default 10)
+- `MISTRAL_CONFIDENCE_THRESHOLD` - Fallback threshold (default 0.7)
 
 ## POST /parse/semantic
 

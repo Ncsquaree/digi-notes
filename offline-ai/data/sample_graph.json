@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {"id": 1, "type": "Concept", "label": "Photosynthesis", "properties": {"definition": "Photosynthesis occurs in chloroplasts.", "examples": []}},
+    {"id": 2, "type": "Concept", "label": "Chloroplast", "properties": {"definition": "Chloroplast facilitates Photosynthesis.", "examples": []}},
+    {"id": 3, "type": "Topic", "label": "Biology", "properties": {"description": "Study of living organisms.", "key_points": ["Plants", "Cells"]}},
+    {"id": 4, "type": "Entity", "label": "CO2", "properties": {"entity_type": "entity", "context": "Chemical compound"}}
+  ],
+  "edges": [
+    {"source": 1, "target": 2, "type": "RELATED_TO", "weight": 0.85},
+    {"source": 1, "target": 3, "type": "PART_OF", "weight": 0.9},
+    {"source": 2, "target": 2, "type": "EXPLAINS", "weight": 0.6}
+  ]
+}

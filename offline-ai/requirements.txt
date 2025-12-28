@@ -1,0 +1,25 @@
+# Core ML
+tflite-runtime==2.15.0       # Lightweight TFLite runtime (CPU inference only)
+numpy==1.24.3
+sentencepiece==0.1.99        # Tokenization for USE Lite
+networkx==3.2.1              # Graph visualization and manipulation
+matplotlib==3.8.2            # Plotting for graph visualization
+
+# NLP utilities
+nltk==3.8.1                  # Text preprocessing, sentence splitting
+
+# Database
+# Note: sqlite3 is built-in to Python standard library, no external dependency needed
+
+# Utilities
+tqdm==4.66.1                 # Progress bars for model downloads
+requests==2.31.0             # Model download from TF Hub
+
+psutil==5.9.6                # System resource monitoring (RAM usage)
+
+# Optional: FAISS for fast similarity search (if needed later)
+# faiss-cpu==1.7.4           # Uncomment for large-scale embedding search
+
+# Dev/Testing
+pytest==7.4.3
+pytest-cov==4.1.0

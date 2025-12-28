@@ -1,0 +1,203 @@
+{
+  "metadata": {
+    "generated_at": "2024-12-19T10:30:00Z",
+    "source_text": "sample_input.txt",
+    "total_flashcards": 15,
+    "by_type": {
+      "definition": 5,
+      "why_how": 3,
+      "formula": 4,
+      "difference": 2,
+      "application": 1
+    },
+    "by_difficulty": {
+      "1": 2,
+      "2": 4,
+      "3": 5,
+      "4": 3,
+      "5": 1
+    }
+  },
+  "flashcards": [
+    {
+      "id": 1,
+      "question": "What is photosynthesis?",
+      "answer": "Photosynthesis is a biological process in which plants convert light energy into chemical energy stored in glucose.",
+      "topic": "Photosynthesis",
+      "entities": ["photosynthesis", "light energy", "chemical energy", "glucose"],
+      "difficulty": 1,
+      "source_type": "rule_based",
+      "embedding_id": 1,
+      "type": "definition",
+      "context": "Introduction to photosynthesis"
+    },
+    {
+      "id": 2,
+      "question": "What are the two main stages of photosynthesis?",
+      "answer": "The two main stages are the light-dependent reactions (occurring in the thylakoid) and the light-independent reactions or Calvin cycle (occurring in the stroma).",
+      "topic": "Photosynthesis",
+      "entities": ["light-dependent reactions", "Calvin cycle", "thylakoid", "stroma"],
+      "difficulty": 2,
+      "source_type": "rule_based",
+      "embedding_id": 2,
+      "type": "definition",
+      "context": "Structure of photosynthesis"
+    },
+    {
+      "id": 3,
+      "question": "What is the role of chlorophyll in photosynthesis?",
+      "answer": "Chlorophyll is the primary pigment that absorbs light energy and initiates the light-dependent reactions by transferring electrons to the electron transport chain.",
+      "topic": "Photosynthesis",
+      "entities": ["chlorophyll", "pigment", "light energy", "electron transport chain"],
+      "difficulty": 2,
+      "source_type": "qa_extracted",
+      "embedding_id": 3,
+      "type": "definition",
+      "context": "Role of chlorophyll"
+    },
+    {
+      "id": 4,
+      "question": "Why is photosynthesis important for life on Earth?",
+      "answer": "Photosynthesis is essential because it produces oxygen as a byproduct and converts solar energy into chemical energy (glucose), which forms the basis of almost all food chains and provides energy for most living organisms.",
+      "topic": "Photosynthesis",
+      "entities": ["oxygen", "solar energy", "glucose", "food chains"],
+      "difficulty": 2,
+      "source_type": "rule_based",
+      "embedding_id": 1,
+      "type": "why_how",
+      "context": "Importance of photosynthesis"
+    },
+    {
+      "id": 5,
+      "question": "How does the Calvin cycle convert CO2 into glucose?",
+      "answer": "The Calvin cycle uses ATP and NADPH from the light reactions to fix CO2 through three phases: carbon fixation (RuBisCO enzyme), reduction phase, and regeneration of RuBP, ultimately producing glyceraldehyde-3-phosphate which is used to make glucose.",
+      "topic": "Calvin Cycle",
+      "entities": ["ATP", "NADPH", "CO2", "RuBisCO", "RuBP", "glucose"],
+      "difficulty": 3,
+      "source_type": "qa_extracted",
+      "embedding_id": 4,
+      "type": "why_how",
+      "context": "Calvin cycle mechanism"
+    },
+    {
+      "id": 6,
+      "question": "What is the equation for photosynthesis?",
+      "answer": "6CO₂ + 6H₂O + light energy → C₆H₁₂O₆ + 6O₂. This represents the conversion of carbon dioxide and water into glucose and oxygen using light energy.",
+      "topic": "Photosynthesis",
+      "entities": ["CO₂", "H₂O", "light energy", "C₆H₁₂O₆", "O₂"],
+      "difficulty": 2,
+      "source_type": "rule_based",
+      "embedding_id": 1,
+      "type": "formula",
+      "context": "Overall photosynthesis equation"
+    },
+    {
+      "id": 7,
+      "question": "What is the formula for the light-dependent reactions?",
+      "answer": "2H₂O + 2NADP⁺ + 3ADP + 3Pi + light energy → O₂ + 2NADPH + 3ATP. This reaction produces the ATP and NADPH needed for the Calvin cycle.",
+      "topic": "Light-Dependent Reactions",
+      "entities": ["H₂O", "NADP⁺", "ADP", "Pi", "O₂", "NADPH", "ATP"],
+      "difficulty": 4,
+      "source_type": "rule_based",
+      "embedding_id": 2,
+      "type": "formula",
+      "context": "Light reactions equation"
+    },
+    {
+      "id": 8,
+      "question": "What is the RuBisCO enzyme and its role?",
+      "answer": "RuBisCO (Ribulose-1,5-bisphosphate carboxylase/oxygenase) is the most abundant enzyme on Earth and catalyzes the first step of the Calvin cycle, fixing CO₂ by combining it with RuBP to form 3-phosphoglycerate.",
+      "topic": "Calvin Cycle",
+      "entities": ["RuBisCO", "ribulose-1,5-bisphosphate carboxylase", "CO₂", "RuBP", "3-phosphoglycerate"],
+      "difficulty": 3,
+      "source_type": "qa_extracted",
+      "embedding_id": 3,
+      "type": "definition",
+      "context": "RuBisCO function"
+    },
+    {
+      "id": 9,
+      "question": "What is the difference between the light-dependent and light-independent reactions?",
+      "answer": "Light-dependent reactions occur in the thylakoid, require light energy, and produce ATP and NADPH. Light-independent reactions (Calvin cycle) occur in the stroma, do not require direct light, and use ATP and NADPH to produce glucose from CO₂.",
+      "topic": "Photosynthesis",
+      "entities": ["light-dependent reactions", "Calvin cycle", "thylakoid", "stroma", "ATP", "NADPH"],
+      "difficulty": 3,
+      "source_type": "rule_based",
+      "embedding_id": 4,
+      "type": "difference",
+      "context": "Comparison of photosynthesis stages"
+    },
+    {
+      "id": 10,
+      "question": "What is the difference between C3 and C4 photosynthesis?",
+      "answer": "C3 photosynthesis (common pathway) produces 3-phosphoglycerate as the first stable product, while C4 photosynthesis produces oxaloacetate (4-carbon compound) first. C4 plants are more efficient in hot, dry climates and have higher light saturation points.",
+      "topic": "Photosynthesis Pathways",
+      "entities": ["C3 photosynthesis", "C4 photosynthesis", "3-phosphoglycerate", "oxaloacetate"],
+      "difficulty": 4,
+      "source_type": "qa_extracted",
+      "embedding_id": 5,
+      "type": "difference",
+      "context": "Types of photosynthesis"
+    },
+    {
+      "id": 11,
+      "question": "How does photosynthesis apply to agriculture and food production?",
+      "answer": "Photosynthesis efficiency directly determines crop yield. Optimizing light, water, CO₂, and temperature conditions maximizes photosynthetic rate. Selective breeding focuses on improving photosynthetic efficiency in crops like rice and wheat to address global food security.",
+      "topic": "Applied Photosynthesis",
+      "entities": ["photosynthesis efficiency", "crop yield", "rice", "wheat", "food security"],
+      "difficulty": 3,
+      "source_type": "rule_based",
+      "embedding_id": 6,
+      "type": "application",
+      "context": "Agricultural applications"
+    },
+    {
+      "id": 12,
+      "question": "What is photolysis?",
+      "answer": "Photolysis is the light-driven splitting of water molecules (2H₂O → 4H⁺ + 4e⁻ + O₂) in the light-dependent reactions, which provides electrons and protons for the electron transport chain and releases oxygen as a byproduct.",
+      "topic": "Light Reactions",
+      "entities": ["photolysis", "water molecules", "electrons", "oxygen", "electron transport chain"],
+      "difficulty": 3,
+      "source_type": "qa_extracted",
+      "embedding_id": 2,
+      "type": "definition",
+      "context": "Water splitting process"
+    },
+    {
+      "id": 13,
+      "question": "What role do photosystems play in photosynthesis?",
+      "answer": "Photosystems I and II are light-harvesting complexes embedded in the thylakoid membrane. PSII absorbs light and initiates photolysis, while PSI regenerates NADPH. Both work together to create the proton gradient driving ATP synthesis.",
+      "topic": "Light Reactions",
+      "entities": ["photosystems", "thylakoid membrane", "photolysis", "NADPH", "ATP synthesis"],
+      "difficulty": 4,
+      "source_type": "rule_based",
+      "embedding_id": 3,
+      "type": "why_how",
+      "context": "Role of photosystems"
+    },
+    {
+      "id": 14,
+      "question": "What is chemiosmosis and how does it relate to photosynthesis?",
+      "answer": "Chemiosmosis is the process by which a proton gradient across the thylakoid membrane drives ATP synthase to produce ATP. In photosynthesis, the light-dependent reactions create this proton gradient when electrons move through the electron transport chain.",
+      "topic": "Energy Production",
+      "entities": ["chemiosmosis", "proton gradient", "thylakoid membrane", "ATP synthase", "electron transport chain"],
+      "difficulty": 5,
+      "source_type": "qa_extracted",
+      "embedding_id": 4,
+      "type": "definition",
+      "context": "Energy conversion mechanism"
+    },
+    {
+      "id": 15,
+      "question": "How do plants regulate photosynthesis?",
+      "answer": "Plants regulate photosynthesis through stomatal opening/closing (controlling CO₂ entry), photorespiration, enzyme regulation, and feedback inhibition by accumulating sugars. Environmental factors like light intensity, temperature, and CO₂ concentration also modulate the rate.",
+      "topic": "Photosynthesis Regulation",
+      "entities": ["stomata", "photorespiration", "enzyme regulation", "CO₂", "light intensity", "temperature"],
+      "difficulty": 4,
+      "source_type": "rule_based",
+      "embedding_id": 5,
+      "type": "why_how",
+      "context": "Regulatory mechanisms"
+    }
+  ]
+}

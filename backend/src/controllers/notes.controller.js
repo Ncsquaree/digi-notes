@@ -16,6 +16,7 @@ async function _persistProcessingResults(noteId, userId, aiData) {
 
     // parsed content
     const parsed_content = data.parsed_content || data.parsedContent || data.parsed || null;
+    const ocr_metadata = data.ocr_metadata || (data.structured && data.structured.ocr_metadata) || null;
 
     // summaries
     const summary_brief = data.summary_brief || data.summaryBrief || (data.summary && data.summary.brief) || null;
@@ -30,6 +31,14 @@ async function _persistProcessingResults(noteId, userId, aiData) {
     // Attach parsed content and optionally nodes (atomic in service)
     if (parsed_content || (nodesArray && nodesArray.length)) {
       await NoteService.attachAIResult(noteId, userId, { parsed_content, nodesArray });
+    }
+
+    if (ocr_metadata) {
+      try {
+        await NoteService.updateNote(noteId, userId, { ocr_metadata });
+      } catch (ocrErr) {
+        logger.logError(ocrErr, { noteId, userId, task: 'persist_ocr_metadata' });
+      }
     }
 
     // Update summaries if present
